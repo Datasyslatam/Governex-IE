@@ -1479,7 +1479,7 @@ END $upgrade_tenants$;
 -- 1. Tenant inicial (id = 1)
 -- IMPORTANTE: actualizar nombre y nit con los datos reales antes de producción.
 INSERT INTO tenants (id, nombre, nit, estado, plan)
-VALUES (1, 'Empresa Inicial Governex', 'PENDIENTE-ACTUALIZAR', 'Activo', 'Enterprise')
+VALUES (1, 'Institución Educativa Montecristo', '900791370', 'Activo', 'Enterprise')
 ON CONFLICT DO NOTHING;
 SELECT setval(
     pg_get_serial_sequence('tenants', 'id'),
@@ -1519,9 +1519,9 @@ ON CONFLICT DO NOTHING;
 -- NOTA: Cambiar contraseña en el primer inicio de sesión.
 INSERT INTO usuarios (nombre, email, password_hash, rol_id, tenant_id)
 VALUES (
-    'Administrador',
-    'admin@governex.com',
-    '$2a$10$6Mg2Yn3K2b3etwW/jpCzEu/V6HWvWtun4BBiEGkpGnKaJ3vn1Nad6',
+    'Rafael Orozco',
+    'rafaorozco@iemontecristo.com',
+    '$2a$10$2.JrGjk59wns0NZAYMpOxulsacCqwy0XDLUlu/iSm6zD7ROKfrs8C',
     (SELECT id FROM roles WHERE nombre = 'Superusuario'),
     1
 ) ON CONFLICT (email) DO NOTHING;
