@@ -228,17 +228,27 @@ CREATE INDEX IF NOT EXISTS idx_actividades_empresa_proceso   ON actividades_empr
 -- NOTA: email es ÚNICO A NIVEL GLOBAL (no por tenant) porque el login
 -- no recibe selección de tenant (POST /api/auth/login solo recibe email+password).
 CREATE TABLE IF NOT EXISTS usuarios (
-    id            SERIAL       PRIMARY KEY,
-    nombre        VARCHAR(100) NOT NULL,
-    email         VARCHAR(150) NOT NULL,
-    password_hash TEXT         NOT NULL,
-    rol_id        INTEGER      NOT NULL REFERENCES roles (id),
-    activo        BOOLEAN      NOT NULL DEFAULT TRUE,
-    creado_en     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    tenant_id     INTEGER      NOT NULL REFERENCES tenants (id) ON DELETE RESTRICT,
+    id                             SERIAL       PRIMARY KEY,
+    nombre                         VARCHAR(100) NOT NULL,
+    email                          VARCHAR(150) NOT NULL,
+    password_hash                  TEXT         NOT NULL,
+    rol_id                         INTEGER      NOT NULL REFERENCES roles (id),
+    activo                         BOOLEAN      NOT NULL DEFAULT TRUE,
+    tiene_permisos_personalizados BOOLEAN      NOT NULL DEFAULT FALSE,
+    creado_en                      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    tenant_id                      INTEGER      NOT NULL REFERENCES tenants (id) ON DELETE RESTRICT,
     CONSTRAINT uq_usuarios_email UNIQUE (email)
 );
 CREATE INDEX IF NOT EXISTS idx_usuarios_tenant_id ON usuarios (tenant_id);
+
+-- Asignación de permisos personalizados directamente a usuarios (N:M)
+CREATE TABLE IF NOT EXISTS usuario_permisos (
+    usuario_id INTEGER NOT NULL REFERENCES usuarios (id) ON DELETE CASCADE,
+    permiso_id INTEGER NOT NULL REFERENCES permisos (id) ON DELETE CASCADE,
+    PRIMARY KEY (usuario_id, permiso_id)
+);
+COMMENT ON TABLE usuario_permisos IS 'Permisos específicos asignados directamente a un usuario si tiene_permisos_personalizados es TRUE.';
+
 
 -- §5.2 — Política de Calidad
 CREATE TABLE IF NOT EXISTS politica_calidad (
@@ -1321,6 +1331,24 @@ CREATE TABLE IF NOT EXISTS registro_cargas_r2 (
 );
 COMMENT ON TABLE registro_cargas_r2 IS 'Registro histórico de todas las cargas de documentos a R2.';
 
+-- Bitácora de actividad general de los usuarios por tenant
+CREATE TABLE IF NOT EXISTS logs_actividad (
+    id             SERIAL       PRIMARY KEY,
+    tenant_id      INTEGER      NOT NULL REFERENCES tenants (id) ON DELETE CASCADE,
+    usuario_id     INTEGER      REFERENCES usuarios (id) ON DELETE SET NULL,
+    usuario_nombre VARCHAR(150),
+    usuario_email  VARCHAR(150),
+    usuario_rol    VARCHAR(50),
+    accion         VARCHAR(100) NOT NULL,
+    recurso        VARCHAR(100),
+    detalle        TEXT,
+    fecha_hora     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_logs_actividad_tenant_id  ON logs_actividad (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_logs_actividad_usuario_id ON logs_actividad (usuario_id);
+CREATE INDEX IF NOT EXISTS idx_logs_actividad_fecha_hora ON logs_actividad (fecha_hora DESC);
+COMMENT ON TABLE logs_actividad IS 'Bitácora de actividad general de los usuarios por tenant.';
+
 -- ============================================================
 -- SECCIÓN DE ACTUALIZACIÓN (para BDs existentes)
 -- ============================================================
@@ -1331,6 +1359,10 @@ COMMENT ON TABLE registro_cargas_r2 IS 'Registro histórico de todas las cargas 
 -- ============================================================
 
 -- ── Columnas añadidas por migraciones a tablas que ya existían ──
+
+-- USUARIOS (permisos personalizados)
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tiene_permisos_personalizados BOOLEAN NOT NULL DEFAULT FALSE;
+
 
 -- RIESGOS (columnas de §6.1 avanzadas + fuente para matriz derivada)
 ALTER TABLE riesgos ADD COLUMN IF NOT EXISTS tratamiento TEXT;
@@ -1407,7 +1439,9 @@ ALTER TABLE salidas_nc ADD CONSTRAINT salidas_nc_disposicion_check CHECK (
 -- USUARIOS: email ÚNICO GLOBAL (no por tenant) — necesario para login sin selección de tenant
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS uq_usuarios_tenant_email;
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_email_key;
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS uq_usuarios_email;
 ALTER TABLE usuarios ADD CONSTRAINT uq_usuarios_email UNIQUE (email);
+
 
 -- UNIQUE compuestos tenant+codigo (reemplazan UNIQUE globales antiguos)
 ALTER TABLE procesos             DROP CONSTRAINT IF EXISTS procesos_codigo_key;
@@ -1479,7 +1513,7 @@ END $upgrade_tenants$;
 -- 1. Tenant inicial (id = 1)
 -- IMPORTANTE: actualizar nombre y nit con los datos reales antes de producción.
 INSERT INTO tenants (id, nombre, nit, estado, plan)
-VALUES (1, 'Institución Educativa Montecristo', '900791370', 'Activo', 'Enterprise')
+VALUES (1, 'Empresa Inicial Governex', 'PENDIENTE-ACTUALIZAR', 'Activo', 'Enterprise')
 ON CONFLICT DO NOTHING;
 SELECT setval(
     pg_get_serial_sequence('tenants', 'id'),
@@ -1519,9 +1553,9 @@ ON CONFLICT DO NOTHING;
 -- NOTA: Cambiar contraseña en el primer inicio de sesión.
 INSERT INTO usuarios (nombre, email, password_hash, rol_id, tenant_id)
 VALUES (
-    'Rafael Orozco',
-    'rafaorozco@iemontecristo.com',
-    '$2a$10$2.JrGjk59wns0NZAYMpOxulsacCqwy0XDLUlu/iSm6zD7ROKfrs8C',
+    'Administrador',
+    'admin@governex.com',
+    '$2a$10$6Mg2Yn3K2b3etwW/jpCzEu/V6HWvWtun4BBiEGkpGnKaJ3vn1Nad6',
     (SELECT id FROM roles WHERE nombre = 'Superusuario'),
     1
 ) ON CONFLICT (email) DO NOTHING;
