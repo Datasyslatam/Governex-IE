@@ -1511,10 +1511,11 @@ END $upgrade_tenants$;
 -- ============================================================
 
 -- 1. Tenant inicial (id = 1)
--- IMPORTANTE: actualizar nombre y nit con los datos reales antes de producción.
 INSERT INTO tenants (id, nombre, nit, estado, plan)
-VALUES (1, 'Empresa Inicial Governex', 'PENDIENTE-ACTUALIZAR', 'Activo', 'Enterprise')
-ON CONFLICT DO NOTHING;
+VALUES (1, 'Institución Educativa Montecristo', 'ABC-123456', 'Activo', 'Enterprise')
+ON CONFLICT (id) DO UPDATE SET
+    nombre = EXCLUDED.nombre,
+    nit    = EXCLUDED.nit;
 SELECT setval(
     pg_get_serial_sequence('tenants', 'id'),
     GREATEST((SELECT MAX(id) FROM tenants), 1)
@@ -1539,7 +1540,7 @@ INSERT INTO platform_admins (nombre, email, password_hash)
 VALUES (
     'SuperAdmin',
     'luismj.dev@gmail.com',
-    '$2a$10$yDFtxb/PoBcbCU6HS5RTp.2gTbLGh0LiRkcdlFeSx6a.CTmV62c5y'
+    '$2a$10$yDFtxb/PoBcbCU6HS5RTp.2gTbLGh0LiRkcdlFeSx6a.CTmV62c5y' --Superadmin123
 ) ON CONFLICT (email) DO NOTHING;
 
 -- 4. Tipos de proceso base (para el tenant 1)
@@ -1549,16 +1550,27 @@ INSERT INTO tipos_proceso (nombre, tenant_id) VALUES
     ('Apoyo',       1)
 ON CONFLICT DO NOTHING;
 
--- 5. Usuario administrador inicial (tenant 1)
+-- 5. Usuario administrador inicial (tenant 1, id = 1)
 -- NOTA: Cambiar contraseña en el primer inicio de sesión.
-INSERT INTO usuarios (nombre, email, password_hash, rol_id, tenant_id)
+DELETE FROM usuarios WHERE (email = 'admin@iem.com' OR email = 'admin@governex.com') AND id != 1;
+
+INSERT INTO usuarios (id, nombre, email, password_hash, rol_id, tenant_id)
 VALUES (
-    'Administrador',
-    'admin@governex.com',
-    '$2a$10$6Mg2Yn3K2b3etwW/jpCzEu/V6HWvWtun4BBiEGkpGnKaJ3vn1Nad6',
+    1,
+    'Admin. Rafael Orozco',
+    'admin@iem.com',
+    '$2a$10$6Mg2Yn3K2b3etwW/jpCzEu/V6HWvWtun4BBiEGkpGnKaJ3vn1Nad6', --Admin123
     (SELECT id FROM roles WHERE nombre = 'Superusuario'),
     1
-) ON CONFLICT (email) DO NOTHING;
+) ON CONFLICT (id) DO UPDATE SET
+    nombre        = EXCLUDED.nombre,
+    email         = EXCLUDED.email,
+    password_hash = EXCLUDED.password_hash;
+
+SELECT setval(
+    pg_get_serial_sequence('usuarios', 'id'),
+    GREATEST((SELECT MAX(id) FROM usuarios), 1)
+);
 
 -- 6. Catálogo RBAC: todos los recursos × todas las acciones
 INSERT INTO permisos (recurso, accion)
