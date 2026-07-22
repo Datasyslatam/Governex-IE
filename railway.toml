@@ -1,0 +1,14 @@
+[build]
+builder = "railpack"
+buildCommand = "npm run build"
+
+[variables]
+RAILPACK_NO_SPA = "1"
+RAILPACK_NODE_VERSION = "22.12"
+
+[deploy]
+startCommand = "node dist-server/index.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
